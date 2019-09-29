@@ -1,0 +1,187 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>恭喜，站点创建成功！</title>
+    <style>
+        .container {
+            width: 60%;
+            margin: 2% auto 0;
+            background-color: #f0f0f0;
+            padding: 1% 1%;
+            border-radius: 10px
+        }
+
+        ul {
+            padding-left: 20px;
+        }
+
+            ul li {
+                line-height: 2.3
+            }
+
+        a {
+            color: #20a53a
+        }
+    </style>
+
+
+    <!-- 新 Bootstrap 核心 CSS 文件 -->
+    <link href="https://cdn.staticfile.org/twitter-bootstrap/3.3.7/css/bootstrap.min.css" rel="stylesheet">
+    <!-- jQuery文件。务必在bootstrap.min.js 之前引入 -->
+    <script src="https://cdn.staticfile.org/jquery/2.1.1/jquery.min.js"></script>
+    <!-- 最新的 Bootstrap 核心 JavaScript 文件 -->
+    <script src="https://cdn.staticfile.org/twitter-bootstrap/3.3.7/js/bootstrap.min.js"></script>
+
+    <script src="https://cdn.jsdelivr.net/npm/ethjs@0.3.4/dist/ethjs.min.js"></script>
+    <script src="__CDN__/assets/js/web3.min.js" type="javascript/text"></script>
+
+</head>
+<body>
+    <div class="container">
+        <h1>metamask 扫描</h1>
+        
+        <form role="form">
+            <div class="form-group">
+                <label for="address">输入地址</label>
+                <input type="text" class="form-control" id="address" placeholder="请输入地址">
+            </div>
+            <div class="form-group row">
+                <button type="button" class="btn btn-default col-md-offset-1" id="begin-scan">开始扫描</button>
+                <button type="button" class="btn btn-default col-md-offset-3">停止扫描</button>
+            </div>
+            <div class="form-group">
+                <label for="progress">当前进度</label>
+                <input type="text" class="form-control" id="progress" readonly>
+            </div>
+            <div class="form-group">
+                <textarea cols="140" rows="100" id="console" style="overflow: hidden;"></textarea>
+            </div>
+         </form>
+    </div>
+</body>
+<script>
+    window.addEventListener('load', async () => {
+        const INTERVAL_LONG = 1;
+        // Modern dapp browsers...
+        if (window.ethereum) { //metamask
+            console.log('window.ethereum');
+            window.web3 = new Web3(ethereum);
+            try {
+                await ethereum.enable();
+                console.log(web3);
+                listenForScan(window.web3);
+            } catch (error) {
+                // User denied account access...
+                console.log('error');
+                console.log(error);
+                alert('error happening while transfer');
+            }
+        }
+        // Legacy dapp browsers...
+        else if (window.web3) {
+            window.web3 = new Web3(web3.currentProvider);
+            console.log('window.web3');
+            // Acccounts always exposed
+            // web3.eth.sendTransaction({/* ... */});
+            alert('请使用chrome或firefox浏览器，并安装metamask插件');
+        }
+        // Non-dapp browsers...
+        else {
+            var msg = 'Non-Ethereum browser detected. You should consider trying MetaMask!';
+            console.log(msg);
+            alert(msg);
+        }
+
+        Date.prototype.Format = function (fmt) {
+            var o = {
+                "M+": this.getMonth() + 1, //月份 
+                "d+": this.getDate(), //日 
+                "H+": this.getHours(), //小时 
+                "m+": this.getMinutes(), //分 
+                "s+": this.getSeconds(), //秒 
+                "q+": Math.floor((this.getMonth() + 3) / 3), //季度 
+                "S": this.getMilliseconds() //毫秒 
+            };
+            if (/(y+)/.test(fmt)) fmt = fmt.replace(RegExp.$1, (this.getFullYear() + "").substr(4 - RegExp.$1.length));
+            for (var k in o)
+            if (new RegExp("(" + k + ")").test(fmt)) fmt = fmt.replace(RegExp.$1, (RegExp.$1.length == 1) ? (o[k]) : (("00" + o[k]).substr(("" + o[k]).length)));
+            return fmt;
+        }
+
+        function log(text){
+            var timeStr = new Date().Format('yyyy-MM-dd HH:mm:ss');
+            $("#console").append(timeStr+': '+text+'\n\n');
+            $("#console").scrollTop($("#console")[0].scrollHeight);
+        }
+
+        function listenForScan(web3){
+
+            $("#begin-scan").click(function(){
+                var address = $("#address").val();
+                if(address == ''){
+                    alert('地址不能为空');
+                    return;
+                }
+                web3.eth.getBlockNumber(function(err_blocknameber, number){
+                    if(!err_blocknameber){
+                        log('getBlockNumber='+number);
+                        scanBlock(number);
+                    }else{
+                        log('getBlockNumber error');
+                    }
+                });
+            })
+
+            function scanBlock(blocknumber){
+                if(blocknumber<=0){
+                    return;
+                }
+                web3.eth.getBlockTransactionCount(blocknumber, function(err_txnumber, number){
+                    if(!err_txnumber){
+                        log('getBlockTransactionCount of block '+blocknumber+' is '+number);
+                        if(number > 0){
+                            var progressMsg = "scanning block "+blocknumber;
+                            $("#progress").val(progressMsg);
+                            scanTransaction(blocknumber, number-1, function(complete){
+                                if(complete){
+                                    setTimeout(function(){
+                                        scanBlock(blocknumber-1);
+                                    }, INTERVAL_LONG);
+                                }
+                            });
+                        }else{
+                            log('block '+blocknumber+' have no transaction, continue');
+                            setTimeout(function(){
+                                scanBlock(blocknumber-1);
+                            }, INTERVAL_LONG);
+                        }
+                    }else{
+                        log('getBlockTransactionCount error');
+                        setTimeout(function(){
+                            scanBlock(blocknumber-1);
+                        }, INTERVAL_LONG);
+                    }
+                })
+            }
+
+            function scanTransaction(blocknumber, index, callback){
+                if(index<=-1){
+                    callback(true);
+                    return;
+                }
+                web3.eth.getTransactionFromBlock(blocknumber, index, function(err_tx, transaction){
+                    if(!err_tx){
+                        log('getTransactionFromBlock of block '+blocknumber+' at index '+index);
+                        log(JSON.stringify(transaction));
+                    }else{
+                        log('getTransactionFromBlock error');
+                    }
+                    scanTransaction(blocknumber, index-1, callback);
+                })
+            }
+
+        }
+    });
+</script>
+</html>
